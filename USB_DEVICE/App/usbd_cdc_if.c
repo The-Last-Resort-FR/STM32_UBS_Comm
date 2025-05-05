@@ -32,6 +32,8 @@
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 extern TIM_HandleTypeDef htim3;
+static uint8_t isTriggerRunning = 0;
+static uint16_t setTriggerFrequency = 0;
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -129,8 +131,8 @@ static int8_t CDC_TransmitCplt_FS(uint8_t *pbuf, uint32_t *Len, uint8_t epnum);
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_DECLARATION */
 void command_handler(uint8_t* cmd, uint8_t* out_status, uint8_t* out_data) {
-	uint16_t c = *cmd | *(cmd+1) << 8;
-	uint16_t arg = *(cmd+2) | *(cmd+3) << 8;
+	uint16_t c = *(cmd+1) | *cmd << 8;
+	uint16_t arg = *(cmd+3) | *(cmd+2) << 8;
 	switch (c) {
 		case CMD_GET_NEXT:
 
@@ -145,13 +147,24 @@ void command_handler(uint8_t* cmd, uint8_t* out_status, uint8_t* out_data) {
 			else {
 				*out_status = STATUS_ERROR;
 			}
+			setTriggerFrequency = arg;
 			break;
 		case CMD_START_TRIG:
 			HAL_TIMEx_PWMN_Start(&htim3, TIM_CHANNEL_1);
+			isTriggerRunning = 1;
 			*out_status = STATUS_READY;
 			break;
 		case CMD_STOP_TRIG:
 			HAL_TIMEx_PWMN_Stop(&htim3, TIM_CHANNEL_1);
+			isTriggerRunning = 0;
+			*out_status = STATUS_READY;
+			break;
+		case CMD_GET_TRIG_FREQ:
+			*out_data = setTriggerFrequency;
+			*out_status = STATUS_READY;
+			break;
+		case CMD_GET_TRIG_STATUS:
+			*out_data = isTriggerRunning;
 			*out_status = STATUS_READY;
 			break;
 		default:
@@ -291,11 +304,13 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
-	if(*Len == 2) {
+	for(uint8_t i = 0; i < 9; i++) {
+		response[i] = 0;
+	}
+	if(*Len == 4) {
 		command_handler(Buf, response, &(response[1]));
 	}
 	else if (*Len ==1) {
-1
 	}
 	else {
 		response[0] = STATUS_ERROR;
